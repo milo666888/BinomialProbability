@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>二項分布模擬器（數位高爾頓板）</title>
+<style>
+:root{
+  --bg:#0f172a;--panel:#111827;--card:#1f2937;
+  --accent:#38bdf8;--accent2:#f87171;
+  --text:#e5e7eb;--muted:#94a3b8;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,"Microsoft JhengHei",Segoe UI,Roboto,Arial,sans-serif;
+  color:var(--text);
+  background:linear-gradient(180deg,#0b1025 0%,#0f172a 60%,#0b1025 100%);
+}
+header{
+  padding:18px 16px 10px;
+  text-align:center;
+}
+header h1{
+  margin:0;
+  font-size:1.8rem;
+  font-weight:800;
+  letter-spacing:.5px;
+  color:#f0f9ff;
+}
+
+.wrap{
+  max-width:1100px;
+  margin:12px auto 28px;
+  padding:0 16px;
+  display:grid;
+  grid-template-columns:1fr 360px;
+  gap:12px;
+}
+.panel{
+  background:rgba(31,41,55,.85);
+  border:1px solid rgba(148,163,184,.2);
+  border-radius:14px;
+  box-shadow:0 8px 30px rgba(0,0,0,.35);
+  backdrop-filter:blur(6px);
+  padding:12px;
+}
+.board-area{display:grid;grid-template-rows:auto auto;gap:12px}
+.canvas-wrap{
+  position:relative;
+  padding:10px;
+  border-radius:12px;
+  background:radial-gradient(1000px 360px at 50% -40%,rgba(56,189,248,.15),transparent 60%),linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0));
+  border:1px solid rgba(148,163,184,.2);
+}
+
+/* 板子與圖表維持比例，桌機版 */
+#board{
+  display:block;
+  width:900px;
+  height:auto;
+  aspect-ratio:900/520;
+  border-radius:10px;
+  background:#0a0f1f;
+}
+#chart{
+  display:block;
+  width:900px;
+  height:auto;
+  aspect-ratio:900/220;
+  border-radius:10px;
+  background:#0b1224;
+}
+
+.legend{
+  display:flex;gap:14px;align-items:center;
+  color:var(--muted);font-size:.9rem;margin:6px 0 0;
+}
+.dot{width:12px;height:12px;border-radius:999px;display:inline-block}
+.bar{background:var(--accent)}.line{background:var(--accent2)}
+
+.stats{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  margin-top:6px;
+}
+.stat{
+  padding:8px 10px;
+  border-radius:10px;
+  background:rgba(2,6,23,.4);
+  border:1px solid rgba(148,163,184,.2);
+}
+.stat .k{font-size:.78rem;color:var(--muted)}
+.stat .v{font-weight:700}
+.status{display:none!important}
+.logo-fixed{
+  position:fixed;right:16px;bottom:16px;z-index:40;
+  width:96px;height:auto;opacity:.95;
+  filter:drop-shadow(0 6px 16px rgba(0,0,0,.45));
+  pointer-events:none;
+}
+
+/* 控制面板：一個選項一排 */
+.controls{
+  padding:12px;
+  display:grid;
+  grid-template-columns:1fr;
+  gap:14px;
+  background:rgba(2,6,23,.35);
+  border:1px dashed rgba(148,163,184,.25);
+  border-radius:12px;
+}
+.control{
+  display:grid;
+  grid-template-rows:auto auto;
+  gap:8px;
+  padding:8px 10px;
+  border-radius:10px;
+  background:rgba(2,6,23,.25);
+  border:1px solid rgba(148,163,184,.18);
+}
+.control label{
+  font-size:.92rem;
+  color:var(--muted);
+  line-height:1.35;
+  word-break:break-word;
+}
+.input-row{
+  display:grid;
+  grid-template-columns:1fr 96px;
+  align-items:center;
+  gap:10px;
+}
+.control input[type="number"]{
+  width:96px;
+  justify-self:end;
+  background:var(--card);
+  color:var(--text);
+  border:1px solid rgba(148,163,184,.35);
+  border-radius:8px;
+  padding:8px 10px;
+}
+.range{
+  appearance:none;width:100%;height:6px;
+  border-radius:6px;
+  background:rgba(148,163,184,.22);
+  outline:none;
+}
+.range::-webkit-slider-thumb{
+  appearance:none;
+  width:16px;height:16px;border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 0 2px rgba(0,0,0,.2);
+}
+.range::-moz-range-thumb{
+  width:16px;height:16px;border-radius:50%;
+  background:var(--accent);border:none;
+}
+
+.btns{
+  display:flex;flex-wrap:wrap;gap:8px;
+  align-items:center;margin-top:10px;
+}
+.btn{
+  appearance:none;
+  border:1px solid rgba(148,163,184,.35);
+  background:linear-gradient(180deg,rgba(56,189,248,.18),rgba(56,189,248,.08));
+  color:#e6f7ff;
+  padding:9px 13px;border-radius:10px;
+  cursor:pointer;font-weight:700;
+  letter-spacing:.3px;
+  transition:.2s transform,.2s border-color;
+}
+.btn:hover{transform:translateY(-1px);border-color:rgba(56,189,248,.6)}
+.btn.secondary{background:linear-gradient(180deg,rgba(148,163,184,.22),rgba(148,163,184,.10))}
+.btn.warn{background:linear-gradient(180deg,rgba(248,113,113,.22),rgba(248,113,113,.10));border-color:rgba(248,113,113,.45);color:#ffecec}
+
+/* 📱 手機樣式 */
+@media (max-width:980px), (hover:none) and (pointer:coarse){
+
+  header{padding:14px 12px 6px}
+  header h1{font-size:1.36rem;letter-spacing:.3px}
+
+  .wrap{grid-template-columns:1fr}
+  #board{width:100%}
+  .chart-panel{display:none!important}
+
+  /* 控制面板卡片化 + 對齊調整 */
+  .panel{
+    padding:10px;
+    border-radius:12px;
+    border-color:rgba(148,163,184,.16);
+    box-shadow:0 6px 18px rgba(0,0,0,.35);
+  }
+  .controls{gap:12px;border-radius:12px;border-style:solid;}
+  .control{
+    padding:10px 12px;
+    border-radius:12px;
+    background:rgba(10,15,31,.55);
+    border-color:rgba(148,163,184,.15);
+  }
+  .control label{font-size:1rem;font-weight:600;}
+  .input-row{grid-template-columns:1fr 104px;gap:12px;}
+  .control input[type="number"]{
+    width:104px;padding:10px 12px;border-radius:10px;font-size:1rem;
+  }
+  .range{height:8px;border-radius:8px;}
+  .range::-webkit-slider-thumb{width:22px;height:22px;}
+  .range::-moz-range-thumb{width:22px;height:22px;}
+
+  /* 統計卡片兩欄 */
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  .stat{padding:10px;border-radius:12px;}
+  .stat .k{font-size:.84rem}
+  .stat .v{font-size:1.02rem}
+
+  /* 按鈕列黏底 */
+  .btns{
+    position:sticky;bottom:8px;z-index:30;
+    margin-top:12px;padding:10px;
+    gap:10px;justify-content:space-between;flex-wrap:nowrap;
+    background:rgba(2,6,23,.55);
+    border:1px solid rgba(148,163,184,.18);
+    border-radius:14px;
+    backdrop-filter:blur(6px);
+  }
+  .btn{
+    flex:1 1 0;min-width:0;
+    padding:12px 10px;border-radius:12px;
+    font-size:1rem;font-weight:800;
+  }
+  .btn.warn{font-weight:800}
+  .logo-fixed{width:72px;right:12px;bottom:12px;opacity:.9}
+}
+</style>
+
+
+</head>
+<body>
+<header><h1>🎯 二項分布模擬器（數位高爾頓板）</h1></header>
+
+<img class="logo-fixed" src="company-logo.png" alt="Company Logo"/>
+
+<div class="wrap">
+  <div class="board-area">
+    <div class="panel canvas-wrap">
+      <canvas id="board" width="900" height="520"></canvas>
+      <div id="status" class="status">狀態：就緒 ✅</div>
+      <div class="legend"><span class="dot bar"></span> 累積次數（每格=成功次數 k） <span class="dot line"></span> 理論二項分布（縮放到總球數）</div>
+      <div class="stats">
+        <div class="stat"><div class="k">總球數</div><div class="v" id="statTotal">0</div></div>
+        <div class="stat"><div class="k">實際平均 k̄</div><div class="v" id="statMean">0</div></div>
+        <div class="stat"><div class="k">理論平均 np</div><div class="v" id="statMeanTh">0</div></div>
+        <div class="stat"><div class="k">理論變異 np(1−p)</div><div class="v" id="statVarTh">0</div></div>
+      </div>
+    </div>
+    <div class="panel chart-panel"><canvas id="chart" width="900" height="220"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="controls">
+      <div class="control">
+        <label for="levels">階層數（3~24）</label>
+        <div class="input-row">
+          <input id="levelsR" class="range" type="range" min="3" max="24" value="12"/>
+          <input id="levels" type="number" min="3" max="24" value="12"/>
+        </div>
+      </div>
+      <div class="control">
+        <label for="pRight">向右機率 p（0~1）</label>
+        <div class="input-row">
+          <input id="pRightR" class="range" type="range" min="0" max="1" step="0.01" value="0.5"/>
+          <input id="pRight" type="number" min="0" max="1" step="0.01" value="0.5"/>
+        </div>
+      </div>
+      <div class="control">
+        <label for="batch">一次丟幾顆（1~200）</label>
+        <div class="input-row">
+          <input id="batchR" class="range" type="range" min="1" max="200" value="12"/>
+          <input id="batch" type="number" min="1" max="200" value="12"/>
+        </div>
+      </div>
+      <div class="control">
+        <label for="release">出球速度（每秒幾批 0.2~20）</label>
+        <div class="input-row">
+          <input id="releaseR" class="range" type="range" min="0.2" max="20" step="0.1" value="3"/>
+          <input id="release" type="number" min="0.2" max="20" step="0.1" value="3"/>
+        </div>
+      </div>
+      <div class="control">
+        <label for="fall">下落速度倍率（0.2~3）</label>
+        <div class="input-row">
+          <input id="fallR" class="range" type="range" min="0.2" max="3" step="0.1" value="1.2"/>
+          <input id="fall" type="number" min="0.2" max="3" step="0.1" value="1.2"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button class="btn" id="btnDrop">🎯 投放一批</button>
+      <button class="btn" id="btnAuto">🔁 自動投放：關</button>
+      <button class="btn secondary" id="btnPause">⏸️ 暫停</button>
+      <button class="btn warn" id="btnReset">♻️ 重置</button>
+    </div>
+  </div>
+</div>
+
+<audio id="bgm" src="bgm.mp3" preload="auto" loop></audio>
+
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const B=setupHiDPI($('board')), C=setupHiDPI($('chart'));
+
+  /* ---------- 全域狀態（先宣告，避免未定義就被引用） ---------- */
+  let params={levels:+$('levels').value,pRight:+$('pRight').value,batch:+$('batch').value,releaseHz:+$('release').value,fallSpeed:+$('fall').value};
+  let geom, balls=[], counts=[], total=0, sumK=0;
+  let paused=false, auto=false;
+  let microQueue=[], queueBatches=0, emitClock=0;
+  const MAX_ACTIVE=12000, AUTO_GAP_FACTOR=0.85;
+
+  /* ---------- 音樂（自動播放/暫停） ---------- */
+  const bgm=$('bgm'); let audioUnlocked=false, musicOn=false;
+  function unlockAudio(){ if(audioUnlocked) return; audioUnlocked=true; updateMusicState(true); }
+  function updateMusicState(force=false){
+    const active = balls.length>0 || microQueue.length>0 || queueBatches>0 || auto;
+    if(!audioUnlocked) return;
+    if(active && (force || bgm.paused)){ bgm.play().then(()=>{musicOn=true;}).catch(()=>{}); }
+    else if(!active && !bgm.paused){ bgm.pause(); musicOn=false; }
+  }
+
+  /* ---------- 工具與建構 ---------- */
+  function setupHiDPI(canvas){
+    const ctx=canvas.getContext('2d'); const DPR=Math.max(1,window.devicePixelRatio||1);
+    const cssW=+canvas.getAttribute('width'), cssH=+canvas.getAttribute('height');
+    canvas.style.width=cssW+'px'; canvas.style.height=cssH+'px';
+    canvas.width=Math.round(cssW*DPR); canvas.height=Math.round(cssH*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0); return {ctx,DPR};
+  }
+  function syncPair(num,range,on){
+    const n=$(num), r=$(range); const set=v=>{n.value=v; r.value=v; on(+v); unlockAudio(); updateMusicState(); };
+    n.addEventListener('input',e=>set(e.target.value)); r.addEventListener('input',e=>set(e.target.value));
+  }
+  function microStagger(){ return Math.max(0.005, Math.min(0.03, 0.3/Math.max(1, params.batch))); }
+
+  function build(){
+    const W=$('board').width/B.DPR, H=$('board').height/B.DPR;
+    const m={top:24,bottom:90,left:24,right:24}, n=params.levels;
+    const bw=W-m.left-m.right, bh=H-m.top-m.bottom;
+    const px=Math.min(28,Math.max(12,bw/(n+2))), ry=Math.max(16,Math.min(36,bh/(n+2)));
+    const cx=W/2, sy=m.top+8, dx=px/2, slots=Array.from({length:n+1},(_,k)=>cx-(n*dx)+k*px);
+    const pegs=[]; for(let r=0;r<n;r++){ const y=sy+(r+1)*ry, row=[]; for(let j=0;j<=r;j++){ row.push({x:cx-(r*dx)+j*px,y}); } pegs.push(row); }
+    geom={W,H,m,n,cx,sy,ry,dx,px,slots,pegs,floor:sy+(n+1)*ry};
+    counts=Array(n+1).fill(0); total=0; sumK=0; balls=[]; microQueue=[]; queueBatches=0; emitClock=0;
+    scheduleChart(); updateMusicState();
+  }
+
+  function makeBall(){
+    const g=geom; let r=0; const pts=[{x:g.cx,y:g.sy}];
+    for(let s=1;s<=g.n;s++){ if(Math.random()<params.pRight) r++; pts.push({x:g.cx+(2*r-s)*g.dx,y:g.sy+s*g.ry}); }
+    pts.push({x:g.slots[r],y:g.floor});
+    return {pts,seg:0,t:0,spd:140*params.fallSpeed,bin:r};
+  }
+
+  /* ---------- 繪圖 ---------- */
+  function drawBoard(){
+    const g=geom, ctx=B.ctx; ctx.clearRect(0,0,g.W,g.H);
+    ctx.fillStyle='#081029'; ctx.fillRect(0,0,g.W,g.H);
+    ctx.strokeStyle='rgba(148,163,184,.35)'; ctx.lineWidth=1.2;
+    ctx.strokeRect(g.m.left,g.m.top,g.W-g.m.left-g.m.right,g.H-g.m.top-g.m.bottom);
+    ctx.fillStyle='rgba(148,163,184,.85)';
+    for(const row of g.pegs){ for(const p of row){ ctx.beginPath(); ctx.arc(p.x,p.y,3,0,2*Math.PI); ctx.fill(); } }
+    ctx.strokeStyle='rgba(56,189,248,.35)'; for(const x of g.slots){ ctx.beginPath(); ctx.moveTo(x,g.floor); ctx.lineTo(x,g.floor-16); ctx.stroke(); }
+    ctx.fillStyle='rgba(56,189,248,.92)';
+    for(const b of balls){ const a=b.pts[b.seg], c=b.pts[b.seg+1]||a; const x=a.x+(c.x-a.x)*b.t, y=a.y+(c.y-a.y)*b.t; ctx.beginPath(); ctx.arc(x,y,4,0,2*Math.PI); ctx.fill(); }
+  }
+  function logF(n){ if(!logF.c){logF.c=[0,0];} const c=logF.c; for(let i=c.length;i<=n;i++) c[i]=c[i-1]+Math.log(i); return c[n]; }
+  function pmf(n,k,p){ if(k<0||k>n) return 0; if(p===0) return k===0?1:0; if(p===1) return k===n?1:0; return Math.exp(logF(n)-logF(k)-logF(n-k)+k*Math.log(p)+(n-k)*Math.log(1-p)); }
+
+  let chartTimer=null;
+  function scheduleChart(){ if(chartTimer) return; chartTimer=setTimeout(()=>{ chartTimer=null; drawChart(); },80); }
+  function drawChart(){
+    const ctx=C.ctx, W=$('chart').width/C.DPR, H=$('chart').height/C.DPR, pad=36, n=params.levels;
+    const data=counts.slice(), theo=Array.from({length:n+1},(_,k)=> total*pmf(n,k,params.pRight));
+    const ymax=Math.max(1,...data,...theo);
+    ctx.clearRect(0,0,W,H); ctx.fillStyle='#0b1224'; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(148,163,184,.25)';
+    for(let i=0;i<=4;i++){ const y=pad+(H-pad-16)*i/4; ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-10,y); ctx.stroke(); }
+    const plotW=W-pad-10, plotH=H-pad-16, barW=plotW/(n+1)*0.8, gap=plotW/(n+1)*0.2;
+    for(let k=0;k<=n;k++){ const x=pad+k*(barW+gap)+gap*.5, h=(data[k]/ymax)*plotH; ctx.fillStyle='rgba(56,189,248,.75)'; ctx.fillRect(x,pad+plotH-h,barW,h); }
+    ctx.strokeStyle='rgba(248,113,113,1)'; ctx.lineWidth=1.8; ctx.beginPath();
+    for(let k=0;k<=n;k++){ const x=pad+k*(barW+gap)+(gap*.5+barW/2); const y=pad+plotH-(theo[k]/ymax)*plotH; k?ctx.lineTo(x,y):ctx.moveTo(x,y); } ctx.stroke();
+    $('statTotal').textContent=total; $('statMean').textContent= total?(sumK/total).toFixed(3):'0';
+    $('statMeanTh').textContent=(params.levels*params.pRight).toFixed(3); $('statVarTh').textContent=(params.levels*params.pRight*(1-params.pRight)).toFixed(3);
+  }
+
+  /* ---------- 投放計時與動畫 ---------- */
+  function scheduleBatch(){ const want=Math.max(1,Math.floor(params.batch)); const space=microStagger(); for(let i=0;i<want;i++) microQueue.push(i*space); }
+  let last=0;
+  function tick(ts){
+    if(!last) last=ts; const dt=Math.min(0.05,(ts-last)/1000); last=ts;
+    if(!paused){
+      const baseInterval=1/Math.max(0.1,params.releaseHz); emitClock-=dt;
+      while(emitClock<=0){ if(auto) scheduleBatch(); if(queueBatches>0){ scheduleBatch(); queueBatches--; } emitClock += (auto? baseInterval*AUTO_GAP_FACTOR : baseInterval); }
+      for(let i=0;i<microQueue.length;){ microQueue[i]-=dt; if(microQueue[i]<=0){ if(balls.length<MAX_ACTIVE){ balls.push(makeBall()); microQueue.splice(i,1); continue; } } i++; }
+      for(let i=balls.length-1;i>=0;i--){ const b=balls[i], a=b.pts[b.seg], c=b.pts[b.seg+1]; if(!c){ counts[b.bin]++; total++; sumK+=b.bin; balls.splice(i,1); scheduleChart(); continue; }
+        const L=Math.max(1,Math.hypot(c.x-a.x,c.y-a.y)); b.t += (b.spd*params.fallSpeed*dt)/L; if(b.t>=1){ b.seg++; b.t=0; } }
+    }
+    drawBoard(); updateMusicState(); requestAnimationFrame(tick);
+  }
+
+  /* ---------- 事件 ---------- */
+  $('btnDrop').addEventListener('click',()=>{ queueBatches+=1; unlockAudio(); updateMusicState(true); });
+  $('btnAuto').addEventListener('click',e=>{ auto=!auto; e.target.textContent=auto?'🔁 自動投放：開':'🔁 自動投放：關'; unlockAudio(); updateMusicState(true); });
+  $('btnPause').addEventListener('click',e=>{ paused=!paused; e.target.textContent=paused?'▶️ 繼續':'⏸️ 暫停'; unlockAudio(); updateMusicState(); });
+  $('btnReset').addEventListener('click',()=>{ auto=false; $('btnAuto').textContent='🔁 自動投放：關'; build(); drawChart(); updateMusicState(); });
+
+  syncPair('levels','levelsR',v=>{ params.levels=v|0; build(); drawChart(); });
+  syncPair('pRight','pRightR',v=>{ params.pRight=+v; scheduleChart(); });
+  syncPair('batch','batchR',v=>{ params.batch=+v; });
+  syncPair('release','releaseR',v=>{ params.releaseHz=+v; });
+  syncPair('fall','fallR',v=>{ params.fallSpeed=+v; });
+
+  /* ---------- 啟動 ---------- */
+  build(); drawBoard(); drawChart(); requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
